@@ -3,9 +3,7 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -13,6 +11,7 @@ import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import type { RequestWithUser } from 'src/common/request-with-user';
 
 @Controller('booking')
 export class BookingController {
@@ -32,7 +31,10 @@ export class BookingController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
   @Post()
-  createBook(@Body() createBookingDto: CreateBookingDto, @Req() req) {
+  createBook(
+    @Body() createBookingDto: CreateBookingDto,
+    @Req() req: RequestWithUser,
+  ) {
     return this.bookingService.createBook(createBookingDto, req.user.id);
   }
 
@@ -118,7 +120,7 @@ export class BookingController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
   @Get()
-  getBooks(@Req() req) {
+  getBooks(@Req() req: RequestWithUser) {
     return this.bookingService.getBooks(req.user.id);
   }
 
@@ -156,7 +158,7 @@ export class BookingController {
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
   @Get('for-owner')
-  getBooksForOwner(@Req() req) {
+  getBooksForOwner(@Req() req: RequestWithUser) {
     return this.bookingService.getBooksForOwner(req.user.id);
   }
 }

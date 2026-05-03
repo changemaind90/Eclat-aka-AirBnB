@@ -23,7 +23,7 @@
 import type { Listing } from '@/types'
 import ListingCard from '@/components/ListingCard.vue'
 
-const props = defineProps<{
+defineProps<{
   listings: Listing[]
   canBook: boolean
   canCancel: boolean

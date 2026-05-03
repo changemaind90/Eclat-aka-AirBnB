@@ -1,30 +1,39 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from 'src/users/users.service';
 import { RegisterDto } from './dtos/register.dto';
 import { User } from '@prisma/client';
 import { LoginDto } from './dtos/login.dto';
+import { UpdateUserDto } from 'src/users/dtos/update-user.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
-    private usersService: UsersService
+    private usersService: UsersService,
   ) {}
 
   async register(registerDto: RegisterDto) {
     const candidate = await this.usersService.findByEmail(registerDto.email);
 
-    let user;
+    let user: User;
 
     if (candidate) {
-        if (!candidate.passwordHash) {
-          console.log("kuku");
-          user = await this.usersService.updateUser(registerDto);
-        } else {
-          throw new ConflictException('User already exist');
-        }
+      if (!candidate.passwordHash) {
+        console.log('kuku');
+        const dto: UpdateUserDto = {
+          email: registerDto.email,
+          password: registerDto.password,
+        };
+        user = await this.usersService.updateUser(dto);
+      } else {
+        throw new ConflictException('User already exist');
+      }
     } else {
       user = await this.usersService.createUser(registerDto);
     }
@@ -37,11 +46,12 @@ export class AuthService {
     // const user = await this.usersService.validateUser(loginDto.email, loginDto.password);
     const user = await this.usersService.findByEmail(loginDto.email);
 
-    if (user && !user.passwordHash) {
+    if (!user || !user.passwordHash) {
       throw new UnauthorizedException();
     }
 
-    if (!(user && await bcrypt.compare(loginDto.password, user.passwordHash))) {
+    const isMatch = await bcrypt.compare(loginDto.password, user.passwordHash);
+    if (!isMatch) {
       throw new UnauthorizedException();
     }
 
@@ -85,11 +95,11 @@ export class AuthService {
     };
   }
 
-  async oauthLogin(email) {
+  async oauthLogin(email: string) {
     let user = await this.usersService.findByEmail(email);
-    
+
     if (!user) {
-      user = await this.usersService.createUser({email});
+      user = await this.usersService.createUser({ email });
     }
 
     const tokens = await this.generateTokens(user);

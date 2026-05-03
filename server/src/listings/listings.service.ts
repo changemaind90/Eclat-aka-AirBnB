@@ -12,14 +12,14 @@ export class ListingsService {
       data: {
         ...createListingDto,
         owner: {
-          connect: {id: userId}
-        }
-      }
+          connect: { id: userId },
+        },
+      },
     });
   }
 
   async find(userId: number) {
-    return await this.prisma.listing.findMany({where: {ownerId: userId}});
+    return await this.prisma.listing.findMany({ where: { ownerId: userId } });
   }
 
   async findAll() {
@@ -27,17 +27,17 @@ export class ListingsService {
   }
 
   async findOne(id: number) {
-    return await this.prisma.listing.findFirst({where: {id}});
+    return await this.prisma.listing.findFirst({ where: { id } });
   }
 
   async update(id: number, updateListingDto: UpdateListingDto) {
     return await this.prisma.listing.update({
-      where: {id},
-      data: updateListingDto
+      where: { id },
+      data: updateListingDto,
     });
   }
 
   async remove(id: number) {
-    return await this.prisma.listing.delete({where: {id}});
+    return await this.prisma.listing.delete({ where: { id } });
   }
 }

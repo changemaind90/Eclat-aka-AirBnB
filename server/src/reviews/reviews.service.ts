@@ -2,33 +2,33 @@ import { Injectable } from '@nestjs/common';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { GetReviewsDto } from './dto/get-reviews.dto';
 import { PrismaService } from 'prisma/prisma.service';
-import { connect } from 'http2';
+import type { AuthUser } from 'src/auth/types';
 
 @Injectable()
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createReviewDto: CreateReviewDto, user: any) {
+  async create(createReviewDto: CreateReviewDto, user: Pick<AuthUser, 'id'>) {
     const review = await this.prisma.review.create({
       data: {
         author: {
           connect: {
-            id: user.id
-          }
+            id: user.id,
+          },
         },
         listing: {
           connect: {
-            id: createReviewDto.listingId
-          }
-        }, 
+            id: createReviewDto.listingId,
+          },
+        },
         booking: {
           connect: {
-            id: createReviewDto.bookingId
-          }
-        }, 
+            id: createReviewDto.bookingId,
+          },
+        },
         rating: createReviewDto.rating,
-        comment: createReviewDto.comment
-      }
+        comment: createReviewDto.comment,
+      },
     });
     return review;
   }
@@ -36,17 +36,18 @@ export class ReviewsService {
   async getAllForListing(getReviewsDto: GetReviewsDto) {
     const reviews = await this.prisma.review.findMany({
       where: {
-        listingId: getReviewsDto.listingId
-      }
+        listingId: getReviewsDto.listingId,
+      },
     });
 
-    let overallRating = 0;
-    reviews.forEach(elem => overallRating += elem.rating)
-    overallRating /= reviews.length;
+    const overallRating =
+      reviews.length === 0
+        ? 0
+        : reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
 
     return {
       overallRating,
-      reviews
+      reviews,
     };
   }
 }

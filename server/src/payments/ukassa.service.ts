@@ -4,10 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { PaymentDto } from './dto/payment.dto';
 import { PayoutDto } from './dto/payout.dto';
 import { PrismaService } from 'prisma/prisma.service';
+import type { AuthUser } from 'src/auth/types';
+
+type YooKassaPaymentResponse = {
+  confirmation: { confirmation_url: string };
+};
 
 @Injectable()
-export class 
-UkassaService {
+export class UkassaService {
   private readonly shopId = process.env.YOOKASSA_SHOP_ID;
   private readonly secretKey = process.env.YOOKASSA_SECRET_KEY;
   private readonly gatewayId = process.env.YOOKASSA_GATEWAY_ID;
@@ -25,7 +29,10 @@ UkassaService {
     };
   }
 
-  async createPayment(paymentDto: PaymentDto, user) {
+  async createPayment(
+    paymentDto: PaymentDto,
+    user: Pick<AuthUser, 'id'>,
+  ): Promise<YooKassaPaymentResponse> {
     const response = await axios.post(
       `${this.baseUrl}/payments`,
       {
@@ -35,7 +42,7 @@ UkassaService {
         },
         confirmation: {
           type: 'redirect',
-          return_url: "https://vk.com", //paymentDto.returnUrl
+          return_url: 'https://vk.com', //paymentDto.returnUrl
         },
         capture: true,
         description: 'Оплата заказа',
@@ -43,42 +50,44 @@ UkassaService {
           toUserId: 1, //paymentDto.toUserId,
           fromUserId: user.id,
           listingId: 2, //paymentDto.listingId,
-        }
+        },
       },
       { headers: this.headers },
     );
 
-    return response.data;
+    return response.data as YooKassaPaymentResponse;
   }
 
-  async createPayout(payoutDto: PayoutDto, user: any) {
-    const userDb = await this.prismaService.user.findFirst({where: {id: user.id}});
+  async createPayout(payoutDto: PayoutDto, user: Pick<AuthUser, 'id'>) {
+    const userDb = await this.prismaService.user.findFirst({
+      where: { id: user.id },
+    });
 
     const response = await axios.post(
       `${this.baseUrl}/payouts`,
       {
         amount: {
-          value: String(userDb?.balance) + ".00",
+          value: String(userDb?.balance) + '.00',
           currency: 'RUB',
         },
         payout_destination_data: {
-          type: "yoo_money",
-          account_number: "4100116075156746", //payoutDto.recipientCardNumber,
+          type: 'yoo_money',
+          account_number: '4100116075156746', //payoutDto.recipientCardNumber,
         },
         description: 'Выплата пользователю',
         metadata: {
-          userId: user.id
-        }
+          userId: user.id,
+        },
       },
       {
         headers: this.headers,
         auth: {
           username: String(this.gatewayId),
-          password: String(this.payoutSecretKey)
-        }
+          password: String(this.payoutSecretKey),
+        },
       },
     );
 
-    return response.data;
+    return response.data as unknown;
   }
 }

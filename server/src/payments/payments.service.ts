@@ -1,70 +1,96 @@
 import { Injectable } from '@nestjs/common';
-import { connect } from 'http2';
 import { PrismaService } from 'prisma/prisma.service';
+
+type CreditMetadata = {
+  id: string;
+  amount: number;
+  toUserId: number;
+  fromUserId: number;
+  listingId: number;
+};
+
+type WithdrawMetadata = {
+  id: string;
+  amount: number;
+  userId: number;
+};
 
 @Injectable()
 export class PaymentsService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  async creditMoney(metadata) {
+  async creditMoney(metadata: Record<string, unknown>) {
+    const m = metadata as Partial<CreditMetadata>;
+    if (!m.id) return;
+
     const transaction = await this.prismaService.transaction.findFirst({
-      where: { paymentId: metadata.id },
+      where: { paymentId: m.id },
     });
 
     if (!transaction) {
+      const amount = typeof m.amount === 'number' ? m.amount : Number(m.amount);
+      const toUserId = Number(m.toUserId);
+      const fromUserId = Number(m.fromUserId);
+      const listingId = Number(m.listingId);
+
       await this.prismaService.transaction.create({
         data: {
-          amount: Math.round(metadata.amount),
+          amount: Math.round(amount),
           to: {
             connect: {
-              id: Number(metadata.toUserId),
+              id: toUserId,
             },
           },
           from: {
             connect: {
-              id: Number(metadata.fromUserId),
+              id: fromUserId,
             },
           },
           listing: {
             connect: {
-              id: Number(metadata.listingId),
+              id: listingId,
             },
           },
-          paymentId: metadata.id,
+          paymentId: m.id,
         },
       });
       await this.prismaService.user.update({
-        where: { id: Number(metadata.toUserId) },
+        where: { id: toUserId },
         data: {
           balance: {
-            increment: Math.round(metadata.amount),
+            increment: Math.round(amount),
           },
         },
       });
     }
   }
 
-  async withdrawMoney(metadata) {
-     const transaction = await this.prismaService.transaction.findFirst({
-      where: { paymentId: metadata.id },
+  async withdrawMoney(metadata: Record<string, unknown>) {
+    const m = metadata as Partial<WithdrawMetadata>;
+    if (!m.id) return;
+
+    const transaction = await this.prismaService.transaction.findFirst({
+      where: { paymentId: m.id },
     });
 
     if (!transaction) {
+      const amount = typeof m.amount === 'number' ? m.amount : Number(m.amount);
+      const userId = Number(m.userId);
       await this.prismaService.transaction.create({
         data: {
-          amount: Math.round(metadata.amount),
+          amount: Math.round(amount),
           from: {
             connect: {
-              id: Number(metadata.userId),
+              id: userId,
             },
           },
-          paymentId: metadata.id,
+          paymentId: m.id,
         },
       });
       await this.prismaService.user.update({
-        where: { id: Number(metadata.userId) },
+        where: { id: userId },
         data: {
-          balance: 0
+          balance: 0,
         },
       });
     }

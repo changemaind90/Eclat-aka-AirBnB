@@ -13,18 +13,24 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  async validate(
+  validate(
     accessToken: string,
-    refreshToken: string,
-    profile: any,
+    _refreshToken: string,
+    profile: unknown,
     done: VerifyCallback,
-  ): Promise<any> {
-    const { name, emails, photos } = profile;
+  ) {
+    const p = profile as {
+      name?: { givenName?: string; familyName?: string };
+      emails?: Array<{ value: string }>;
+      photos?: Array<{ value: string }>;
+    };
+    const email = p.emails?.[0]?.value;
+    if (!email) return done(new Error('Google profile missing email'));
     const user = {
-      email: emails[0].value,
-      firstName: name.givenName,
-      lastName: name.familyName,
-      picture: photos[0].value,
+      email,
+      firstName: p.name?.givenName,
+      lastName: p.name?.familyName,
+      picture: p.photos?.[0]?.value,
       accessToken,
     };
     done(null, user);

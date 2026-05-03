@@ -1,3 +1,3 @@
 export class GetReviewsDto {
-    readonly listingId: number;
+  readonly listingId: number;
 }

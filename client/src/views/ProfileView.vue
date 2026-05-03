@@ -95,7 +95,7 @@ const handleUpdateSuccess = async () => {
 
 const cancelBooking = async (bookingId: number) => {
   try {
-    await listingsStore.cancelBooking(bookingId.toString());
+    await listingsStore.cancelBooking(bookingId);
     // Обновляем список броней
     await loadData();
   } catch (error: any) {

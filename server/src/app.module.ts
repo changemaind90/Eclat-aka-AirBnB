@@ -10,15 +10,16 @@ import { PaymentsModule } from './payments/payments.module';
 import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
-  imports: [AuthModule,
+  imports: [
+    AuthModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ".env"
+      envFilePath: '.env',
     }),
     BookingModule,
     ListingsModule,
     PaymentsModule,
-    ReviewsModule
+    ReviewsModule,
   ],
   providers: [PrismaService, ListingsService],
   controllers: [ListingsController],

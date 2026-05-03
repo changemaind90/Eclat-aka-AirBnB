@@ -1,3 +1,3 @@
 export class PayoutDto {
-    readonly recipientCardNumber: string;
+  readonly recipientCardNumber: string;
 }

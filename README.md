@@ -31,20 +31,29 @@
 - **Карты**: Google Maps API  
 - **API**: Axios + REST 
 
-1. 🛠 **Клонирование репозитория**  
-   ```bash
-   git clone https://github.com/changemaind90/Eclat-aka-Airbnb.git
-   cd eclat
-2. ⚙️ **Инициализация зависимостей**
+## 📚 Документация / Manual
+
+- **Pipeline (install → dev → build → lint → docs)**: `docs/PIPELINE.md`
+- **Client UI manual (Storybook)**: `docs/CLIENT_UI.md`
+- **Server API manual (Swagger/OpenAPI)**: `docs/SERVER_API.md`
+
+## 🚀 Быстрый старт (RU)
+
 ```bash
-  cd client && npm install  # Для клиентской части
-  cd server && npm install  # Для серверной части
+git clone https://github.com/changemaind90/Eclat-aka-Airbnb.git
+cd Eclat-aka-AirBnB
 ```
 
-3. **🏃 Запуск приложения**
 ```bash
-  npm run dev  # Запуск клиента
-  npm run server  # Запуск сервера
+cd client
+npm install
+npm run dev
+```
+
+```bash
+cd server
+npm install
+npm run start:dev
 ```
 
 ### 🇺🇸 English version README.md
@@ -68,22 +77,21 @@
 - **Maps**: Google Maps JavaScript API  
 - **API**: Axios + RESTful service  
 
-## � Launch Guide  
+## 🚀 Launch Guide (EN)
 
-1. 🛠 **Clone repository**  
-   ```bash
-   git clone https://github.com/changemaind90/Eclat-aka-Airbnb.git
-   cd eclat
-
-
-2. ⚙️ **Initialize dependencies**
 ```bash
-  cd client && npm install  # Client-side
-  cd server && npm install  # Server-side
+git clone https://github.com/changemaind90/Eclat-aka-Airbnb.git
+cd Eclat-aka-AirBnB
 ```
 
-3. **🏃 Run application**
 ```bash
-  npm run dev  # Start client
-  npm run server  # Start server
+cd client
+npm install
+npm run dev
+```
+
+```bash
+cd server
+npm install
+npm run start:dev
 ```

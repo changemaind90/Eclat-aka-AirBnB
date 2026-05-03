@@ -42,21 +42,17 @@ const routes = [
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue')
   },
-  // Изменяем обработку неизвестных путей
-  { 
-    path: '/:pathMatch(.*)*', 
-    redirect: '/404' // Перенаправляем на страницу 404 вместо главной
-  },
   {
     path: '/register',
     name: 'register',
     component: () => import('@/views/AuthView.vue'),
     meta: { guestOnly: true }
   },
-  { path: '/:pathMatch(.*)*',
-    redirect: '/'}]
+  // Unknown paths go to 404
+  { path: '/:pathMatch(.*)*', redirect: '/404' }
+]
     
-const router = createRouter({history: createWebHistory(),routes})
+const router = createRouter({ history: createWebHistory(), routes })
 
 router.onError((error) => {
   if ((error as any).code === '404' || (error as any).status === 404) {
@@ -66,49 +62,29 @@ router.onError((error) => {
   }
 })
 
-router.beforeEach((to, from, next) => {                       // Навигационный guard
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
-  const hasToken = localStorage.getItem('token') || sessionStorage.getItem('token');
-
-  console.log('Навигация:', {
-  from: from.path,
-  to: to.path,
-  isAuthenticated: authStore.isAuthenticated,
-  hasToken: !!localStorage.getItem('token')})
+  const hasToken = !!(localStorage.getItem('token') || sessionStorage.getItem('token'))
 
   if (!authStore.isAuthenticated && hasToken) {
     authStore.checkAuth()
-      .then(() => {
-        checkRouteAccess();
-      })
+      .then(() => finish())
       .catch(() => {
-        authStore.logout();
-        next('/login');
-      });
-    return;
+        authStore.logout()
+        next('/login')
+      })
+    return
   }
 
-  checkRouteAccess();
+  finish()
 
-  function checkRouteAccess() {
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-      next('/login');
-    } else if (to.meta.guestOnly && authStore.isAuthenticated) {
-      next('/');
-    } else {
-      next();
-    }
+  function finish() {
+    if (to.meta.requiresAuth && !authStore.isAuthenticated) return next('/login')
+    if (to.meta.guestOnly && authStore.isAuthenticated) return next('/')
+    return next()
   }
-
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    console.log('Доступ запрещен: требуется авторизация')
-    return next('/login')}
-
-  if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return next('/')}
-
-  next()})
+})
 
 console.log('Доступные маршруты:', routes.map(r => r.path))     // Лог всех зарегистрированных маршрутов
 

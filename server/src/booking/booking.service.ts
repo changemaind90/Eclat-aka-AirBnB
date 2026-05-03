@@ -1,15 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { PrismaService } from 'prisma/prisma.service';
-import { connect } from 'http2';
 
 @Injectable()
 export class BookingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createBook(createBookingDto: CreateBookingDto, userId: number) {
-    const booking_id = await this.prisma.listing.findUnique({where: {id: createBookingDto.listingId}});
-    if(!booking_id) throw new NotFoundException("Booking not found");
+    const booking_id = await this.prisma.listing.findUnique({
+      where: { id: createBookingDto.listingId },
+    });
+    if (!booking_id) throw new NotFoundException('Booking not found');
 
     const d1 = new Date(createBookingDto.startDate);
     const d2 = new Date(createBookingDto.endDate);
@@ -22,58 +23,60 @@ export class BookingService {
         startDate: new Date(createBookingDto.startDate),
         endDate: new Date(createBookingDto.endDate),
         totalPrice: booking_id.pricePerNight * days,
-        status: "PENDING",
+        status: 'PENDING',
         user: {
-          connect: {id: userId}
+          connect: { id: userId },
         },
         listing: {
-          connect: {id: createBookingDto.listingId}
-        }
-      }
-    })
+          connect: { id: createBookingDto.listingId },
+        },
+      },
+    });
   }
 
   async confirmBook(id: number) {
     return await this.prisma.booking.update({
-      where: {id},
+      where: { id },
       data: {
-        status: "CONFIRMED"
-      }
+        status: 'CONFIRMED',
+      },
     });
   }
 
   async cancelBook(id: number) {
     return await this.prisma.booking.update({
-      where: {id},
+      where: { id },
       data: {
-        status: "CANCELED"
-      }
+        status: 'CANCELED',
+      },
     });
   }
 
   async completeBook(id: number) {
     return await this.prisma.booking.update({
-      where: {id},
+      where: { id },
       data: {
-        status: "COMPLETED"
-      }
+        status: 'COMPLETED',
+      },
     });
   }
 
   async getBooks(userId: number) {
-    return await this.prisma.booking.findMany({where: {userId}});
+    return await this.prisma.booking.findMany({ where: { userId } });
   }
 
   async getBooksForOwner(userId: number) {
-    const listings = await this.prisma.listing.findMany({where: {ownerId: userId}});
-    const listingsIds = listings.map(listing => listing.id);
+    const listings = await this.prisma.listing.findMany({
+      where: { ownerId: userId },
+    });
+    const listingsIds = listings.map((listing) => listing.id);
 
     return await this.prisma.booking.findMany({
       where: {
         listingId: {
-          in: listingsIds
-        }
-      }
+          in: listingsIds,
+        },
+      },
     });
   }
 }

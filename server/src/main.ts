@@ -12,12 +12,12 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("/booking/api/docs", app, documentFactory);
+  SwaggerModule.setup('/booking/api/docs', app, documentFactory);
 
   app.enableCors();
   app.use(cookieParser());
-  app.setGlobalPrefix("/booking/api/");
+  app.setGlobalPrefix('/booking/api/');
 
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+void bootstrap();
