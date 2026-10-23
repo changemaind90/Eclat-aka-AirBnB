@@ -43,12 +43,21 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import { API_BASE_URL } from "@/api";
 import AuthForm from "@/components/AuthForm.vue";
 
 const router = useRouter();
 const authStore = useAuthStore();
 const isLoginView = ref(true);
 const authError = ref<string | null>(null);
+
+type ApiFailure = { statusCode?: number; message?: string };
+
+function asApiFailure(error: unknown): ApiFailure {
+  return typeof error === "object" && error !== null
+    ? (error as ApiFailure)
+    : {};
+}
 
 const handleLogin = async (credentials: {
   email: string;
@@ -59,11 +68,12 @@ const handleLogin = async (credentials: {
     authError.value = null;
     await authStore.login(credentials);
     router.push("/profile");
-  } catch (error: any) {
-    if (error.response?.status === 401) {
+  } catch (error) {
+    const failure = asApiFailure(error);
+    if (failure.statusCode === 401) {
       authError.value = "Пользователь не найден. Зарегистрироваться?";
     } else {
-      authError.value = error.message || "Ошибка авторизации";
+      authError.value = failure.message || "Ошибка авторизации";
     }
   }
 };
@@ -75,11 +85,11 @@ const handleRegister = async (credentials: {
 }) => {
   try {
     authError.value = null;
-    const result = await authStore.register(credentials);
-    console.log('Результат регистрации:', result)
+    await authStore.register(credentials);
     router.push("/profile");
-  } catch (error: any) {
-    authError.value = error.message || "Registration failed. Please try again.";
+  } catch (error) {
+    authError.value =
+      asApiFailure(error).message || "Registration failed. Please try again.";
   }
 };
 
@@ -89,7 +99,7 @@ const switchToRegister = () => {
 };
 
 const handleSocialLogin = (provider: string) => {
-  window.location.href = `${import.meta.env.VITE_API_URL}/auth/${provider}`;
+  window.location.href = `${API_BASE_URL}/auth/${provider}`;
 };
 </script>
 

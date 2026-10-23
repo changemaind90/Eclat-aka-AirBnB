@@ -3,6 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from 'src/users/users.service';
@@ -16,6 +17,7 @@ export class AuthService {
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
+    private configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -25,7 +27,6 @@ export class AuthService {
 
     if (candidate) {
       if (!candidate.passwordHash) {
-        console.log('kuku');
         const dto: UpdateUserDto = {
           email: registerDto.email,
           password: registerDto.password,
@@ -66,10 +67,11 @@ export class AuthService {
 
   async refreshTokens(userId: number, refreshToken: string) {
     const user = await this.usersService.findById(userId);
-    if (!user || !user.refreshToken) throw new Error('Access Denied');
+    if (!user || !user.refreshToken)
+      throw new UnauthorizedException('Access Denied');
 
     const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
-    if (!isMatch) throw new Error('Access Denied');
+    if (!isMatch) throw new UnauthorizedException('Access Denied');
 
     const tokens = await this.generateTokens(user);
     await this.usersService.setRefreshToken(user.id, tokens.refreshToken);
@@ -80,18 +82,19 @@ export class AuthService {
     const payload = { id: user.id, email: user.email };
 
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: 'access_secret',
+      secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
       expiresIn: '15m',
     });
 
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: 'refresh_secret',
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 
     return {
       accessToken,
       refreshToken,
+      user: { id: user.id, email: user.email },
     };
   }
 

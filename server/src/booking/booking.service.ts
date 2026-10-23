@@ -1,82 +1,119 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { PrismaService } from 'prisma/prisma.service';
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 @Injectable()
 export class BookingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createBook(createBookingDto: CreateBookingDto, userId: number) {
-    const booking_id = await this.prisma.listing.findUnique({
+    const listing = await this.prisma.listing.findUnique({
       where: { id: createBookingDto.listingId },
     });
-    if (!booking_id) throw new NotFoundException('Booking not found');
+    if (!listing) throw new NotFoundException('Listing not found');
 
-    const d1 = new Date(createBookingDto.startDate);
-    const d2 = new Date(createBookingDto.endDate);
+    const startDate = new Date(createBookingDto.startDate);
+    const endDate = new Date(createBookingDto.endDate);
+    if (endDate <= startDate) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+    const nights = Math.max(
+      1,
+      Math.ceil((endDate.getTime() - startDate.getTime()) / MS_PER_DAY),
+    );
 
-    const diffMs = Math.abs(d2.getTime() - d1.getTime());
-    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    return this.prisma.$transaction(async (tx) => {
+      const overlapping = await tx.booking.findFirst({
+        where: {
+          listingId: createBookingDto.listingId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          startDate: { lt: endDate },
+          endDate: { gt: startDate },
+        },
+      });
+      if (overlapping) {
+        throw new ConflictException(
+          'Listing is already booked for the selected dates',
+        );
+      }
 
-    return await this.prisma.booking.create({
-      data: {
-        startDate: new Date(createBookingDto.startDate),
-        endDate: new Date(createBookingDto.endDate),
-        totalPrice: booking_id.pricePerNight * days,
+      return tx.booking.create({
+        data: {
+          startDate,
+          endDate,
+          totalPrice: listing.pricePerNight * nights,
+          status: 'PENDING',
+          user: { connect: { id: userId } },
+          listing: { connect: { id: createBookingDto.listingId } },
+        },
+      });
+    });
+  }
+
+  async confirmBook(id: number, userId: number) {
+    const result = await this.prisma.booking.updateMany({
+      where: {
+        id,
         status: 'PENDING',
-        user: {
-          connect: { id: userId },
-        },
-        listing: {
-          connect: { id: createBookingDto.listingId },
-        },
+        listing: { ownerId: userId },
       },
+      data: { status: 'CONFIRMED' },
     });
+    if (result.count === 0) {
+      throw new ForbiddenException('Booking not found or cannot be confirmed');
+    }
+    return this.prisma.booking.findUnique({ where: { id } });
   }
 
-  async confirmBook(id: number) {
-    return await this.prisma.booking.update({
-      where: { id },
-      data: {
+  async cancelBook(id: number, userId: number) {
+    const result = await this.prisma.booking.updateMany({
+      where: {
+        id,
+        userId,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      data: { status: 'CANCELED' },
+    });
+    if (result.count === 0) {
+      throw new ForbiddenException('Booking not found or cannot be canceled');
+    }
+    return this.prisma.booking.findUnique({ where: { id } });
+  }
+
+  async completeBook(id: number, userId: number) {
+    const result = await this.prisma.booking.updateMany({
+      where: {
+        id,
         status: 'CONFIRMED',
+        listing: { ownerId: userId },
       },
+      data: { status: 'COMPLETED' },
     });
-  }
-
-  async cancelBook(id: number) {
-    return await this.prisma.booking.update({
-      where: { id },
-      data: {
-        status: 'CANCELED',
-      },
-    });
-  }
-
-  async completeBook(id: number) {
-    return await this.prisma.booking.update({
-      where: { id },
-      data: {
-        status: 'COMPLETED',
-      },
-    });
+    if (result.count === 0) {
+      throw new ForbiddenException('Booking not found or cannot be completed');
+    }
+    return this.prisma.booking.findUnique({ where: { id } });
   }
 
   async getBooks(userId: number) {
-    return await this.prisma.booking.findMany({ where: { userId } });
+    return this.prisma.booking.findMany({
+      where: { userId },
+      orderBy: { startDate: 'desc' },
+    });
   }
 
   async getBooksForOwner(userId: number) {
-    const listings = await this.prisma.listing.findMany({
-      where: { ownerId: userId },
-    });
-    const listingsIds = listings.map((listing) => listing.id);
-
-    return await this.prisma.booking.findMany({
-      where: {
-        listingId: {
-          in: listingsIds,
-        },
-      },
+    return this.prisma.booking.findMany({
+      where: { listing: { ownerId: userId } },
+      orderBy: { startDate: 'desc' },
     });
   }
 }

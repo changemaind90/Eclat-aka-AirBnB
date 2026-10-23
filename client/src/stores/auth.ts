@@ -1,7 +1,60 @@
 import { defineStore } from "pinia";
-import api from "@/api";
+import api, { API_BASE_URL } from "@/api";
 import type { User, Booking } from "@/types";
-import type { Router } from 'vue-router'
+import type { Router } from "vue-router";
+
+type TokenPayload = {
+  id?: number | string;
+  sub?: number | string;
+  userId?: number | string;
+  email?: string;
+  name?: string;
+  exp?: number;
+};
+
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "=",
+  );
+  return atob(padded);
+}
+
+function userFromToken(token: string): User | null {
+  try {
+    const payload = JSON.parse(
+      decodeBase64Url(token.split(".")[1] ?? ""),
+    ) as TokenPayload;
+    if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+      return null;
+    }
+    const id = Number(payload.id ?? payload.sub ?? payload.userId);
+    if (!id || isNaN(id)) return null;
+    return {
+      id,
+      name: payload.name || payload.email?.split("@")[0] || "",
+      email: payload.email || "",
+      createdAt: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  const message = (error as { message?: string } | null)?.message;
+  return message || fallback;
+}
+
+function saveToken(token: string, rememberMe = true) {
+  const storage = rememberMe ? localStorage : sessionStorage;
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+  storage.setItem("token", token);
+}
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -15,10 +68,8 @@ export const useAuthStore = defineStore("auth", {
     initialize() {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-        // console.log(token)
       if (token) {
         this.isAuthenticated = true;
-        // Автоматически проверяем токен при инициализации
         this.checkAuth().catch(() => this.logout());
       }
     },
@@ -29,28 +80,22 @@ export const useAuthStore = defineStore("auth", {
       rememberMe?: boolean;
     }) {
       try {
-        console.log("[Auth] Login attempt for:", credentials.email);
         this.isLoading = true;
         this.error = null;
-        const response = await api.post("/auth/login", credentials);
-        console.log("[Авторизация] Ответ:", response.data);
+        const response = await api.post("/auth/login", {
+          email: credentials.email,
+          password: credentials.password,
+        });
         if (!response.data?.accessToken) {
           throw new Error("Нет токена!");
         }
-        const storage = credentials.rememberMe ? localStorage : sessionStorage;
-        storage.setItem("token", response.data.accessToken);
-        console.log(
-          `[Аторизация] Токен сохранен в: ${
-            credentials.rememberMe ? "localStorage" : "sessionStorage"
-          }`
-        );
-        this.user = response.data.user;
+        saveToken(response.data.accessToken, credentials.rememberMe ?? true);
+        this.user =
+          response.data.user ?? userFromToken(response.data.accessToken);
         this.isAuthenticated = true;
-        console.log("[Auth] Login successful for:", this.user?.email);
         return response.data;
-      } catch (error: any) {
-        console.error("[Авторизация] Ошибка авторизации", error);
-        this.error = error.message || "Неверные учетные данные";
+      } catch (error) {
+        this.error = errorMessage(error, "Неверные учетные данные");
         throw error;
       } finally {
         this.isLoading = false;
@@ -63,107 +108,70 @@ export const useAuthStore = defineStore("auth", {
       password: string;
     }) {
       try {
-        console.log("[Auth] Registration attempt for:", userData.email);
         this.isLoading = true;
         this.error = null;
-        const response = await api.post("/auth/register", userData);
-        console.log("[Auth] Registration response:", response.data);
-
-        if (!response.data?.token) {
+        const response = await api.post("/auth/register", {
+          email: userData.email,
+          password: userData.password,
+        });
+        if (!response.data?.accessToken) {
           throw new Error("No token received");
         }
-        localStorage.setItem("token", response.data.token);
-        this.user = response.data.user;
+        saveToken(response.data.accessToken);
+        this.user =
+          response.data.user ?? userFromToken(response.data.accessToken);
+        if (this.user && userData.name) {
+          this.user.name = userData.name;
+        }
         this.isAuthenticated = true;
-        console.log("[Auth] Registration successful for:", this.user?.email);
         return response.data;
-      } catch (error: any) {
-        console.error("[Auth] Registration error:", error);
-        this.error = error.message || "Ошибка регистрации";
+      } catch (error) {
+        this.error = errorMessage(error, "Ошибка регистрации");
         throw error;
       } finally {
         this.isLoading = false;
       }
-    },async fetchUserBookings(): Promise<Booking[]> {
-      try {
-        const response = await api.get('/booking');
-        return response.data;
-      } catch (error) {
-        console.error('Error fetching bookings:', error);
-        throw error;
-      }
     },
 
-  // Создать бронь
-  async createBooking(listingId: number, dates: { start: string; end: string }): Promise<Booking> {
-    try {
-      const response = await api.post('/booking', { 
+    async fetchUserBookings(): Promise<Booking[]> {
+      const response = await api.get("/booking");
+      return response.data;
+    },
+
+    async createBooking(
+      listingId: number,
+      dates: { start: string; end: string },
+    ): Promise<Booking> {
+      const response = await api.post("/booking", {
         listingId,
-        ...dates
+        startDate: dates.start,
+        endDate: dates.end,
       });
       return response.data;
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      throw error;
-    }
-  },
+    },
 
-  // Отменить бронь
-  async cancelBooking(bookingId: number): Promise<void> {
-    try {
+    async cancelBooking(bookingId: number): Promise<void> {
       await api.post(`/booking/cancel/${bookingId}`);
-    } catch (error) {
-      console.error('Error cancelling booking:', error);
-      throw error;
-    }
-  },
+    },
 
-      // Подтвердить завершение брони
-      async completeBooking(bookingId: number): Promise<void> {
-        try {
-          await api.post(`/booking/complete/${bookingId}`);
-        } catch (error) {
-          console.error('Error completing booking:', error);
-          throw error;
-        }
-      },
+    async completeBooking(bookingId: number): Promise<void> {
+      await api.post(`/booking/complete/${bookingId}`);
+    },
 
     async checkAuth() {
       try {
-        console.log("[Auth] Проверка авторизации");
         this.isLoading = true;
-        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-        console.log("[Auth] Токен есть!:", !!token);
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        if (!token) return false;
 
-        if (!token) {
-          console.log("[Auth] Токен не найден");
-          return false;
-        }
+        const user = userFromToken(token);
+        if (!user) throw new Error("Invalid token");
 
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        console.log("Декодированные данные токена:", payload);
-        console.log("sub есть:", 'sub' in payload);
-        const userId = Number(payload.sub || payload.id || payload.userId);
-        console.log("Декодируем юзер ID:", payload.sub, "->", userId);
-
-       if (!userId || isNaN(Number(userId))) {
-          console.error("Invalid user ID in token:", userId);
-          throw new Error("Invalid user ID");
-        }
-
-        this.user = {
-          id: Number(userId),
-          name: payload.name || "",
-          email: payload.email,
-          createdAt: new Date().toISOString(),
-        };
-        console.log("[Auth] User ID установлен:", this.user.id);
+        this.user = user;
         this.isAuthenticated = true;
-        console.log("[Auth] User ID установлен:", this.user.id);
-        console.log("[Auth] Залогинен по токену");
         return true;
-      } catch (error: any) {
-        console.error("[Auth] Ошибка проверки логина пользователя:", error);
+      } catch {
         this.logout();
         return false;
       } finally {
@@ -172,20 +180,26 @@ export const useAuthStore = defineStore("auth", {
     },
 
     logout(router?: Router) {
-      console.log("[Auth] Logging out...");
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      if (token) {
+        void api
+          .post("/auth/logout", undefined, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          .catch(() => undefined);
+      }
       localStorage.removeItem("token");
       sessionStorage.removeItem("token");
       this.isAuthenticated = false;
       this.user = null;
-       if (router) {
-          router.push('/login');
-        }
-      console.log("[Auth] Logout completed");
-      
+      if (router) {
+        void router.push("/login");
+      }
     },
+
     async socialLogin(provider: string) {
-      console.log("[Auth] Social login with:", provider);
-      window.location.href = `${import.meta.env.VITE_API_URL}/auth/${provider}`;
+      window.location.href = `${API_BASE_URL}/auth/${provider}`;
     },
   },
 });

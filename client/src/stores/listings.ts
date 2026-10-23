@@ -10,50 +10,52 @@ export const useListingsStore = defineStore("listings", {
     currentListing: null as Listing | null,
     isLoading: false,
     error: null as string | null,
-    // add 13 06 25
-    listings: [] as Listing[],
-    loadingStates: new Map<number, boolean>(),
-    // add 190625 
     userBookings: [] as Booking[],
   }),
 
   actions: {
-    async fetchUserListings(_userId?: number) {
+    async fetchUserListings(): Promise<Listing[]> {
       try {
         this.isLoading = true;
         const authStore = useAuthStore();
-         if (!authStore.user?.id || isNaN(authStore.user.id)) {
-            throw new Error("User ID не доступен или невалиден");
-          }
-        const response = await api.get(`/listings?userId=${authStore.user.id}`);
-        this.userListings = response.data;
+        if (!authStore.user?.id || isNaN(authStore.user.id)) {
+          throw new Error("User ID не доступен или невалиден");
+        }
+        const response = await api.get("/listings");
+        this.userListings = response.data.items ?? response.data;
+        return this.userListings;
       } catch (error) {
         console.error("Ошибка загрузки:", error);
         this.error = "Ошибка загрузки объявлений пользователя";
+        return [];
       } finally {
         this.isLoading = false;
       }
     },
 
-    async fetchAllListings() {
+    async fetchAllListings(): Promise<Listing[]> {
       try {
         this.isLoading = true;
         const response = await api.get("/listings/all");
-        this.allListings = response.data;
+        this.allListings = response.data.items ?? response.data;
+        return this.allListings;
       } catch (error) {
         console.error("Ошибка загрузки:", error);
         this.error = "Ошибка загрузки всех объявлений";
+        return [];
       } finally {
         this.isLoading = false;
       }
     },
 
-    async fetchUserBookings() {
+    async fetchUserBookings(): Promise<Booking[]> {
       try {
-        const response = await api.get('/booking')
-        this.userBookings = response.data
+        const response = await api.get("/booking");
+        this.userBookings = response.data;
+        return this.userBookings;
       } catch (error) {
-        console.error("Ошибка загрузки бронирований:", error)
+        console.error("Ошибка загрузки бронирований:", error);
+        return [];
       }
     },
 
@@ -75,6 +77,7 @@ export const useListingsStore = defineStore("listings", {
     async deleteListing(id: string) {
       try {
         await api.delete(`/listings/${id}`);
+        this.userListings = this.userListings.filter((l) => l.id !== Number(id));
       } catch (error) {
         console.error("Error deleting listing:", error);
         throw error;
@@ -84,15 +87,18 @@ export const useListingsStore = defineStore("listings", {
     async updateListing(id: string, data: Partial<Listing>): Promise<Listing> {
       try {
         const authStore = useAuthStore();
-        // Проверяем, что пользователь владелец
         const listing = this.userListings.find((l) => l.id === Number(id));
-        if (!listing || listing.userId !== Number(authStore.user?.id)) {
+        if (!listing || listing.ownerId !== Number(authStore.user?.id)) {
           throw new Error(
-            "Вы не можете редактировать объявление потому что вы его не подавали!"
+            "Вы не можете редактировать объявление потому что вы его не подавали!",
           );
         }
 
         const response = await api.patch(`/listings/${id}`, data);
+        const index = this.userListings.findIndex((l) => l.id === Number(id));
+        if (index !== -1) {
+          this.userListings[index] = response.data;
+        }
         return response.data;
       } catch (error) {
         console.error("Error updating listing:", error);
@@ -100,44 +106,35 @@ export const useListingsStore = defineStore("listings", {
       }
     },
 
-    async createBooking(listingId: number, dates: { start: string; end: string }) {
-        try {
-       /*  const authStore = useAuthStore()
-        if (!authStore.user?.id) throw new Error("Требуется авторизация") */
-        
-        const response = await api.post('/booking', {
+    async createBooking(
+      listingId: number,
+      dates: { start: string; end: string },
+    ) {
+      try {
+        const response = await api.post("/booking", {
           listingId,
           startDate: dates.start,
-          endDate: dates.end
-        })
-
-        /* console.log("Данные для брони:", {
-          listingId: typeof listingId,
-          startDate: dates.start,      
-          endDate: dates.end,          
-          userId: typeof authStore.user.id  
-        }); */
-
-        console.log("Данные для брони:", {
-          listingId: typeof listingId,
-          startDate: dates.start,      
           endDate: dates.end,
         });
-        return response.data
+        await this.fetchUserBookings();
+        return response.data;
       } catch (error) {
-        console.error("Ошибка бронирования:", error)
-        throw error
+        console.error("Ошибка бронирования:", error);
+        throw error;
       }
     },
 
     async cancelBooking(bookingId: number) {
       try {
         const response = await api.post(`/booking/cancel/${bookingId}`);
-        console.log("Отмена брони:", response.data);
-        await this.fetchUserBookings()
+        await this.fetchUserBookings();
         return response.data;
-      } catch (error: any) {
-        console.error("Ошибка отмены:", error.response?.data || error.message);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : (error as { message?: string })?.message;
+        console.error("Ошибка отмены:", message);
         throw error;
       }
     },
@@ -152,15 +149,13 @@ export const useListingsStore = defineStore("listings", {
       this.isLoading = true;
       try {
         const authStore = useAuthStore();
-
         if (!authStore.user) {
           throw new Error("Пользователь не авторизован");
         }
 
-        this.isLoading = true
-        const response = await api.post("/listings", listingData)
-        this.userListings.push(response.data)
-        return response.data
+        const response = await api.post("/listings", listingData);
+        this.userListings.push(response.data);
+        return response.data;
       } catch (error) {
         console.error("Ошибка создания:", error);
         this.error = "Ошибка создания объявления";

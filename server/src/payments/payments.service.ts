@@ -1,98 +1,90 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 
-type CreditMetadata = {
+type WebhookPayload = {
   id: string;
   amount: number;
-  toUserId: number;
-  fromUserId: number;
-  listingId: number;
-};
-
-type WithdrawMetadata = {
-  id: string;
-  amount: number;
-  userId: number;
+  userId?: number;
 };
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prismaService: PrismaService) {}
+  private readonly logger = new Logger(PaymentsService.name);
 
-  async creditMoney(metadata: Record<string, unknown>) {
-    const m = metadata as Partial<CreditMetadata>;
-    if (!m.id) return;
+  constructor(private readonly prisma: PrismaService) {}
 
-    const transaction = await this.prismaService.transaction.findFirst({
-      where: { paymentId: m.id },
+  async creditMoney({ id, amount }: WebhookPayload) {
+    if (!id) return;
+
+    const payment = await this.prisma.payment.findUnique({
+      where: { yookassaId: id },
     });
+    if (!payment || payment.status === 'SUCCEEDED') return;
 
-    if (!transaction) {
-      const amount = typeof m.amount === 'number' ? m.amount : Number(m.amount);
-      const toUserId = Number(m.toUserId);
-      const fromUserId = Number(m.fromUserId);
-      const listingId = Number(m.listingId);
-
-      await this.prismaService.transaction.create({
-        data: {
-          amount: Math.round(amount),
-          to: {
-            connect: {
-              id: toUserId,
-            },
-          },
-          from: {
-            connect: {
-              id: fromUserId,
-            },
-          },
-          listing: {
-            connect: {
-              id: listingId,
-            },
-          },
-          paymentId: m.id,
-        },
-      });
-      await this.prismaService.user.update({
-        where: { id: toUserId },
-        data: {
-          balance: {
-            increment: Math.round(amount),
-          },
-        },
-      });
+    if (Math.round(amount) !== payment.amount) {
+      this.logger.warn(
+        `Payment ${id} amount mismatch: expected ${payment.amount}, got ${amount}`,
+      );
+      return;
     }
+
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.payment.updateMany({
+        where: { id: payment.id, status: 'PENDING' },
+        data: { status: 'SUCCEEDED' },
+      });
+      if (updated.count === 0) return;
+
+      await tx.transaction.create({
+        data: {
+          amount: payment.amount,
+          fromId: payment.fromUserId,
+          toId: payment.toUserId,
+          listingId: payment.listingId,
+          paymentId: id,
+        },
+      });
+      await tx.user.update({
+        where: { id: payment.toUserId },
+        data: { balance: { increment: payment.amount } },
+      });
+    });
   }
 
-  async withdrawMoney(metadata: Record<string, unknown>) {
-    const m = metadata as Partial<WithdrawMetadata>;
-    if (!m.id) return;
+  async withdrawMoney({ id, amount, userId }: WebhookPayload) {
+    if (!id || !userId) return;
 
-    const transaction = await this.prismaService.transaction.findFirst({
-      where: { paymentId: m.id },
-    });
+    const rounded = Math.round(amount);
+    if (!Number.isFinite(rounded) || rounded <= 0) return;
 
-    if (!transaction) {
-      const amount = typeof m.amount === 'number' ? m.amount : Number(m.amount);
-      const userId = Number(m.userId);
-      await this.prismaService.transaction.create({
-        data: {
-          amount: Math.round(amount),
-          from: {
-            connect: {
-              id: userId,
-            },
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Unique paymentId guarantees idempotency for concurrent webhooks.
+        await tx.transaction.create({
+          data: {
+            amount: rounded,
+            fromId: userId,
+            paymentId: id,
           },
-          paymentId: m.id,
-        },
+        });
+
+        const updated = await tx.user.updateMany({
+          where: { id: userId, balance: { gte: rounded } },
+          data: { balance: { decrement: rounded } },
+        });
+        if (updated.count === 0) {
+          throw new BadRequestException('Insufficient balance');
+        }
       });
-      await this.prismaService.user.update({
-        where: { id: userId },
-        data: {
-          balance: 0,
-        },
-      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return;
+      }
+      throw error;
     }
   }
 }

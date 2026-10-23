@@ -1,7 +1,15 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
-import { GetReviewsDto } from './dto/get-reviews.dto';
 import { AuthGuard } from '@nestjs/passport';
 import type { RequestWithUser } from 'src/common/request-with-user';
 
@@ -19,7 +27,7 @@ export class ReviewsController {
   }
 
   @Get()
-  getAllForListing(@Body() getReviewsDto: GetReviewsDto) {
-    return this.reviewsService.getAllForListing(getReviewsDto);
+  getAllForListing(@Query('listingId', ParseIntPipe) listingId: number) {
+    return this.reviewsService.getAllForListing(listingId);
   }
 }

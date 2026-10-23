@@ -1,5 +1,5 @@
 <template>
-  <<div class="user-listings">
+  <div class="user-listings">
     <h3>Ваши объявления</h3>
     <div v-if="listings.length === 0">Нет объявлений</div>
     <div v-else class="listings-grid">

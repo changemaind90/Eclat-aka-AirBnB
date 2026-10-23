@@ -1,25 +1,51 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PrismaService } from 'prisma/prisma.service';
 
-describe('AppController (e2e)', () => {
+describe('Auth validation (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue({
+        user: { findFirst: jest.fn().mockResolvedValue(null) },
+        $connect: jest.fn(),
+        $disconnect: jest.fn(),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('rejects an invalid login body with 400', () => {
     return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+      .post('/auth/login')
+      .send({ email: 'not-an-email', password: 'x' })
+      .expect(400);
+  });
+
+  it('rejects unknown fields with 400', () => {
+    return request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'a@b.com', password: 'secret', extra: true })
+      .expect(400);
   });
 });

@@ -26,7 +26,6 @@
             :key="provider.id" class="socials-item"
             @click="handleSocialLogin(provider.id)"
             :title="`Войти через ${provider.name}`">
-          >
             {{ provider.name.substring(0, 2) }}
           </li>
         </ul>
@@ -77,7 +76,6 @@ const emit = defineEmits<Emits>()
 const form = ref({ name: "", email: "", password: "" })
 
 const handleSubmit = () => {
-  console.log("Отправка формы, rememberMe:", rememberMe.value)
   if (props.isLoginView) {
     emit("submit", {
       email: form.value.email,
@@ -104,11 +102,8 @@ const socialProviders = ref<SocialProvider[]>([
 ])
 
 const handleSocialLogin = (providerId: string) => {
-  emit("social-login", providerId);
-  window.location.href = `/api/auth/${providerId}`
+  emit("social-login", providerId)
 }
-
-console.log(socialProviders)
 </script>
 
 <style>

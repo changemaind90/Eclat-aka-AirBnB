@@ -10,17 +10,21 @@ export const useNotificationStore = defineStore('notification', {
   }),
   actions: {
     add(message: string, type: 'success' | 'error' | 'info' = 'info') {
+      const id = Date.now() + Math.random()
       this.notifications.push({
-        id: Date.now(),
+        id,
         message,
         type
       })
       setTimeout(() => {
-        this.remove(this.notifications.length - 1)
+        this.remove(id)
       }, 3000)
     },
-    remove(index: number) {
-      this.notifications.splice(index, 1)
+    remove(id: number) {
+      const index = this.notifications.findIndex((n) => n.id === id)
+      if (index !== -1) {
+        this.notifications.splice(index, 1)
+      }
     }
   }
 })

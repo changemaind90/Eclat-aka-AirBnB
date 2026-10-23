@@ -38,6 +38,11 @@ const routes = [
     meta: { guestOnly: true }
   },
   {
+    path: '/auth/callback',
+    name: 'auth-callback',
+    component: () => import('@/views/AuthCallbackView.vue')
+  },
+  {
     path: '/404',
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue')
@@ -55,7 +60,8 @@ const routes = [
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.onError((error) => {
-  if ((error as any).code === '404' || (error as any).status === 404) {
+  const navError = error as { code?: string | number; status?: number }
+  if (navError.code === '404' || navError.status === 404) {
     router.push('/404')
   } else {
     console.error('Навигационная ошибка:', error)
@@ -86,8 +92,4 @@ router.beforeEach((to, _from, next) => {
   }
 })
 
-console.log('Доступные маршруты:', routes.map(r => r.path))     // Лог всех зарегистрированных маршрутов
-
-router.isReady().then(() => {                                   // Проверка инициализации
-  console.log('Router is ready! Current route:', router.currentRoute.value)})
 export default router

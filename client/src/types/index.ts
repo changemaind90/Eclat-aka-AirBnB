@@ -10,25 +10,26 @@ export interface Listing {
   id: number
   title: string
   description: string
-  price: number
   address: string
-  city: string
-  images: string[]
-  userId: number
+  pricePerNight: number
+  numberOfGuests: number
+  ownerId: number
+  images?: string[]
+  city?: string
   user?: User
-  createdAt: string
+  createdAt?: string
 }
 
 export interface ListingCreateDto {
   title: string
   description: string
-  price: number
   address: string
-  city: string
+  pricePerNight: number
+  numberOfGuests: number
 }
 
 export interface AuthResponse {
-  token: string
+  accessToken: string
   user: User
 }
 
@@ -38,11 +39,15 @@ export interface ApiError {
   errors?: Record<string, string[]>
 }
 
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED' | 'COMPLETED'
+
 export interface Booking {
   id: number;
   listingId: number;
   userId: number;
   startDate: string;
   endDate: string;
-  createdAt: string;
+  totalPrice: number;
+  status: BookingStatus;
+  createdAt?: string;
 }

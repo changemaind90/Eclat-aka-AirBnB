@@ -14,7 +14,7 @@
           :can-cancel="authStore.isAuthenticated"
           :can-edit="
             authStore.user?.id !== undefined &&
-            Number(authStore.user.id) === listing.userId
+            Number(authStore.user.id) === listing.ownerId
           "
           @edit="handleEdit"
           @click="goToListing(listing.id)"
@@ -25,6 +25,7 @@
 
     <CreateListingForm
       v-if="authStore.isAuthenticated"
+      :listing-to-edit="editingListing"
       @success="handleUpdateSuccess"
       @cancel="editingListing = null"
     />
@@ -32,7 +33,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch  } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore, useListingsStore } from "@/stores";
 import UserInfo from "@/components/UserInfo.vue";
@@ -46,42 +47,36 @@ const router = useRouter();
 
 const loading = ref(false);
 const error = ref<string | null>(null);
-const bookings = ref<Listing[]>([]);
-const userListings = ref<Listing[]>([]);
 const editingListing = ref<Listing | null>(null);
 
 const user = computed(() => authStore.user);
 
-watch(() => authStore.user?.id, (newId) => {
-  if (newId && !isNaN(newId)) {
-    listingsStore.fetchUserListings();
+const displayedListings = computed(() => {
+  const bookedIds = new Set(
+    listingsStore.userBookings
+      .filter((b) => b.status === "PENDING" || b.status === "CONFIRMED")
+      .map((b) => b.listingId),
+  );
+  const bookedListings = listingsStore.allListings.filter((l) =>
+    bookedIds.has(l.id),
+  );
+  const seen = new Set<number>();
+  const result: Listing[] = [];
+  for (const listing of [...bookedListings, ...listingsStore.userListings]) {
+    if (!seen.has(listing.id)) {
+      seen.add(listing.id);
+      result.push(listing);
+    }
   }
-}, { immediate: true });
-
-// Объединенные списки для отображения
-const displayedListings = computed(() => [
-  ...bookings.value,
-  ...userListings.value,
-]);
+  return result;
+});
 
 const goToListing = (id: number) => {
   router.push(`/listing/${id}`);
 };
 
-const handleBook = async (listingId: number) => {
-  console.log('Booking initiated for:', listingId)
-  try {
-    console.log("Попытка забронировать:", listingId);
-    await listingsStore.createBooking(listingId, {
-      start: new Date().toISOString().split("T")[0],
-      end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0],
-    });
-    console.log("Бронирование успешно");
-  } catch (error) {
-    console.error("Ошибка бронирования:", error);
-  }
+const handleBook = async () => {
+  await loadData();
 };
 
 const handleEdit = (listing: Listing) => {
@@ -93,44 +88,28 @@ const handleUpdateSuccess = async () => {
   await loadData();
 };
 
-const cancelBooking = async (bookingId: number) => {
-  try {
-    await listingsStore.cancelBooking(bookingId);
-    // Обновляем список броней
-    await loadData();
-  } catch (error: any) {
-    error.value = "Ошибка отмены бронирования";
-  }
+const cancelBooking = async () => {
+  await loadData();
 };
 
 const loadData = async () => {
   loading.value = true;
+  error.value = null;
   try {
     await authStore.checkAuth();
-
-    // Загружаем бронирования и объявления параллельно
-    const bookingsData = await listingsStore.fetchUserBookings();
-    const listingsData = await listingsStore.fetchUserListings(
-      authStore.user?.id ? Number(authStore.user.id) : undefined
-    );
-
-    if (Array.isArray(bookingsData)) {
-      bookings.value = bookingsData;
-    }
-
-    if (Array.isArray(listingsData)) {
-      userListings.value = listingsData;
-    }
-  } catch (e) {
+    await Promise.all([
+      listingsStore.fetchAllListings(),
+      listingsStore.fetchUserListings(),
+      listingsStore.fetchUserBookings(),
+    ]);
+  } catch {
     error.value = "Ошибка загрузки данных";
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(async () => {
-  await loadData();
-});
+onMounted(loadData);
 </script>
 
 <style>

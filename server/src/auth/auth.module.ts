@@ -6,7 +6,6 @@ import { JwtRefreshStrategy } from './strategys/jwt-refresh.strategy';
 import { AuthController } from './auth.controller';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { PrismaService } from 'prisma/prisma.service';
 import { GoogleStrategy } from './strategys/google.strategy';
 
 @Module({
@@ -20,7 +19,6 @@ import { GoogleStrategy } from './strategys/google.strategy';
     UsersService,
     JwtStrategy,
     JwtRefreshStrategy,
-    PrismaService,
     GoogleStrategy,
   ],
 })

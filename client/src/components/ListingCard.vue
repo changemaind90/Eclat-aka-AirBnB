@@ -1,17 +1,17 @@
-
 <template>
   <div class="listing-card" @click="$emit('click')">
-    <img 
+    <img
       :src="listing.images?.length ? listing.images[0] : '/default-image.jpg'"
+      :alt="listing.title"
       @error="handleImageError"
       loading="lazy"
-    >
+    />
     <div class="listing-details">
       <h3>{{ listing.title }}</h3>
-      <p>{{ listing.price }} ₽</p>
+      <p>{{ listing.pricePerNight }} ₽</p>
     </div>
-     <button 
-      v-if="canBook && !isBookedByCurrentUser && authStore.isAuthenticated"
+    <button
+      v-if="canBook && !isBookedByCurrentUser && !isOwnListing && authStore.isAuthenticated"
       @click="handleBook"
       :disabled="isBookingInProgress"
       class="book-btn"
@@ -19,15 +19,17 @@
       {{ isBookingInProgress ? 'Бронируем...' : 'Забронировать' }}
     </button>
 
-    <button 
-       v-if="isBookedByCurrentUser"
+    <button
+      v-if="canCancel && isBookedByCurrentUser"
       @click="handleCancel"
       :disabled="isBookingInProgress"
     >
       {{ isBookingInProgress ? 'Отменяем...' : 'Отменить бронь' }}
     </button>
 
-    <button v-if="canEdit" @click="$emit('edit', listing)">Редактировать</button>
+    <button v-if="canEdit" @click.stop="$emit('edit', listing)">
+      Редактировать
+    </button>
   </div>
 </template>
 
@@ -35,62 +37,74 @@
 import { computed, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useListingsStore } from '@/stores/listings'
-import type { Booking, Listing } from "@/types";
+import type { Booking, BookingStatus, Listing } from '@/types'
+
+const props = defineProps<{
+  listing: Listing
+  canBook?: boolean
+  canCancel?: boolean
+  canEdit?: boolean
+}>()
+
+const emit = defineEmits<{
+  book: [listingId: number]
+  'cancel-booking': [bookingId: number]
+  click: []
+  edit: [listing: Listing]
+}>()
 
 const authStore = useAuthStore()
 const listingsStore = useListingsStore()
 const isBookingInProgress = ref(false)
 
+const ACTIVE_STATUSES: BookingStatus[] = ['PENDING', 'CONFIRMED']
 
-const isBookedByCurrentUser = computed(() => {
-  return listingsStore.userBookings.some(
-    (booking: Booking) => booking.listingId === props.listing.id
+const isOwnListing = computed(
+  () => authStore.user?.id === props.listing.ownerId
+)
+
+const activeBooking = computed<Booking | undefined>(() =>
+  listingsStore.userBookings.find(
+    (booking: Booking) =>
+      booking.listingId === props.listing.id &&
+      ACTIVE_STATUSES.includes(booking.status)
   )
-});
+)
+
+const isBookedByCurrentUser = computed(() => !!activeBooking.value)
+
 const handleBook = async (e: Event) => {
-  e.stopPropagation();
-  isBookingInProgress.value = true;
+  e.stopPropagation()
+  isBookingInProgress.value = true
   try {
     await listingsStore.createBooking(props.listing.id, {
       start: new Date().toISOString().split('T')[0],
-      end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    });
-    emit('book'); 
+      end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0],
+    })
+    emit('book', props.listing.id)
   } catch (error) {
-    console.error("Booking error:", error);
+    console.error('Booking error:', error)
   } finally {
-    isBookingInProgress.value = false;
+    isBookingInProgress.value = false
   }
-};
+}
 
 const handleCancel = async (e: Event) => {
-  e.stopPropagation();
-  isBookingInProgress.value = true;
+  e.stopPropagation()
+  const booking = activeBooking.value
+  if (!booking) return
+  isBookingInProgress.value = true
   try {
-    const booking = listingsStore.userBookings.find(
-      (b: Booking) => b.listingId === props.listing.id
-    );
-    
-    if (booking) {
-      await listingsStore.cancelBooking(booking.id); // Число, не строка!
-    }
-    emit('cancel-booking');
+    await listingsStore.cancelBooking(booking.id)
+    emit('cancel-booking', booking.id)
   } catch (error) {
-    console.error("Cancel error:", error);
+    console.error('Cancel error:', error)
   } finally {
-    isBookingInProgress.value = false;
+    isBookingInProgress.value = false
   }
-};
-const props = defineProps({
-  listing: {
-    type: Object as () => Listing,
-    required: true
-  },
-  canBook: Boolean,
-  canCancel: Boolean,
-  canEdit: Boolean
-})
-const emit = defineEmits(['book', 'cancel-booking', 'click', 'edit'])
+}
 
 const handleImageError = (e: Event) => {
   (e.target as HTMLImageElement).src = '/default-image.jpg'
@@ -112,14 +126,14 @@ const handleImageError = (e: Event) => {
   object-fit: cover;
 }
 .listing-card {
-  transition: 
+  transition:
     box-shadow 0.2s ease-out,
-    transform 0.2s ease-out; /* Только визуальные свойства */
-  contain: strict; /* Изолирует перерисовку */
+    transform 0.2s ease-out;
+  contain: strict;
 }
-/* Анимация кнопок */
-.book-btn, .cancel-btn {
-  transition: 
+.book-btn,
+.cancel-btn {
+  transition:
     opacity 0.3s ease,
     transform 0.2s ease;
 }
@@ -129,8 +143,13 @@ button:disabled {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.95; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .listing-details {

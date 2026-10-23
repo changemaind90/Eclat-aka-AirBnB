@@ -7,6 +7,8 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { useNotificationStore } from '@/stores/notification'
-const { notifications } = useNotificationStore()
+const store = useNotificationStore()
+const { notifications } = storeToRefs(store)
 </script>

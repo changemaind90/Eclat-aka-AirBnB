@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,6 +17,12 @@ enum Status {
   COMPLETED
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+}
+
 model User {
   id           Int     @id @default(autoincrement())
   email        String  @unique
@@ -27,11 +30,13 @@ model User {
   refreshToken String?
   balance      Int     @default(0)
 
-  listings     Listing[]
-  bookings     Booking[]
-  reviews      Review[]
-  sentTxns     Transaction[] @relation("SentTransactions")
-  receivedTxns Transaction[] @relation("ReceivedTransactions")
+  listings         Listing[]
+  bookings         Booking[]
+  reviews          Review[]
+  sentTxns         Transaction[] @relation("SentTransactions")
+  receivedTxns     Transaction[] @relation("ReceivedTransactions")
+  paymentsSent     Payment[]     @relation("PaymentFrom")
+  paymentsReceived Payment[]     @relation("PaymentTo")
 }
 
 model Listing {
@@ -46,9 +51,12 @@ model Listing {
 
   reviews  Review[]
   bookings Booking[]
+  payments Payment[]
 
-  owner   User @relation(fields: [ownerId], references: [id])
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   ownerId Int
+
+  @@index([ownerId])
 }
 
 model Booking {
@@ -60,11 +68,14 @@ model Booking {
 
   reviews Review[]
 
-  user   User @relation(fields: [userId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId Int
 
-  listing   Listing @relation(fields: [listingId], references: [id])
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId Int
+
+  @@index([userId])
+  @@index([listingId])
 }
 
 model Review {
@@ -72,27 +83,55 @@ model Review {
   rating  Int
   comment String
 
-  author   User @relation(fields: [authorId], references: [id])
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId Int
 
-  listing   Listing @relation(fields: [listingId], references: [id])
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId Int
 
-  booking   Booking @relation(fields: [bookingId], references: [id])
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   bookingId Int
+
+  @@index([authorId])
+  @@index([listingId])
+  @@index([bookingId])
 }
 
 model Transaction {
   id        Int    @id @default(autoincrement())
   amount    Int
-  paymentId String
+  paymentId String @unique
 
-  from   User @relation("SentTransactions", fields: [fromId], references: [id])
+  from   User @relation("SentTransactions", fields: [fromId], references: [id], onDelete: Cascade)
   fromId Int
 
-  to   User? @relation("ReceivedTransactions", fields: [toId], references: [id])
+  to   User? @relation("ReceivedTransactions", fields: [toId], references: [id], onDelete: SetNull)
   toId Int?
 
-  listing   Listing? @relation(fields: [listingId], references: [id])
+  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
   listingId Int?
+
+  @@index([fromId])
+  @@index([toId])
+}
+
+model Payment {
+  id         Int           @id @default(autoincrement())
+  amount     Int
+  status     PaymentStatus @default(PENDING)
+  yookassaId String?       @unique
+  createdAt  DateTime      @default(now())
+
+  from   User @relation("PaymentFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  fromUserId Int
+
+  to   User @relation("PaymentTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUserId Int
+
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId Int
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([listingId])
 }

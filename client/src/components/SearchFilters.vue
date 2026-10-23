@@ -2,7 +2,7 @@
   <div class="search-filters">
     <input v-model="searchQuery" type="text"
       placeholder="Поиск по названию" @input="handleInput">
-    <select v-model="selectedType">
+    <select v-model="selectedType" @change="handleInput">
       <option value="">Все типы</option>
       <option value="apartment">Квартира</option>
       <option value="house">Дом</option>
@@ -14,7 +14,9 @@
 import { ref } from 'vue'
 const searchQuery = ref('')
 const selectedType = ref('')
-const emit = defineEmits(['search'])
+const emit = defineEmits<{
+  search: [filters: { query: string; type: string }]
+}>()
 const handleInput = () => {
   emit('search', {
     query: searchQuery.value,

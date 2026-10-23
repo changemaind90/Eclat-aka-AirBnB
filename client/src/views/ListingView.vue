@@ -1,7 +1,7 @@
 <template>
   <div v-if="loading" class="loading">Загрузка...</div>
   <div v-else-if="listing">
-    <div class="gallery">
+    <div v-if="listing.images?.length" class="gallery">
       <img
         v-for="(image, index) in listing.images"
         :key="index"
@@ -12,7 +12,7 @@
     <div class="details">
       <h1>{{ listing.title }}</h1>
       <p class="pricePerNight">{{ pricePerNight }} ₽ / ночь</p>
-      <p class="location">{{ listing.city }}, {{ listing.address }}</p>
+      <p class="location">{{ listing.address }}</p>
       <p class="description">{{ listing.description }}</p>
     </div>
   </div>
@@ -44,7 +44,7 @@ onMounted(async () => {
 
 const pricePerNight = computed(() =>
   listing.value
-    ? new Intl.NumberFormat("ru-RU").format(listing.value.price)
+    ? new Intl.NumberFormat("ru-RU").format(listing.value.pricePerNight)
     : "0"
 );
 </script>

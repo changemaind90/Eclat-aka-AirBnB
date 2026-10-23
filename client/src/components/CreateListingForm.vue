@@ -3,14 +3,6 @@
     <h2>{{ isEditing ? 'Редактировать объявление' : 'Создать новое объявление' }}</h2>
     <form @submit.prevent="handleSubmit">
 
-      <div v-if="authStore.user">
-      User ID: {{ authStore.user.id }}
-      Auth status: {{ authStore.isAuthenticated }}
-      </div>
-      <div v-else>
-        Пользователь не авторизован
-      </div>
-
       <!-- Основные поля -->
       <div class="form-group">
         <label>Название:</label>
@@ -44,7 +36,7 @@
           v-model.number="formData.pricePerNight" 
           required 
           type="number" 
-          min="0" 
+          min="1" 
           max="10000000"
           step="1000"
         >
@@ -64,26 +56,32 @@
       <button type="submit" :disabled="loading">
         {{ loading ? 'Отправка...' : (isEditing ? 'Обновить' : 'Создать') }}
       </button>
+      <button v-if="isEditing" type="button" class="cancel-btn" @click="$emit('cancel')">
+        Отмена
+      </button>
       <div v-if="error" class="error">{{ error }}</div>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useListingsStore } from '@/stores/listings'
 import { useAuthStore } from '@/stores/auth'
+import type { Listing } from '@/types'
 
 const authStore = useAuthStore()
 const listingsStore = useListingsStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
-const props = defineProps({
-  listingToEdit: {
-    type: Object,
-    default: null
-  }
-})
+const props = defineProps<{
+  listingToEdit?: Listing | null
+}>()
+
+const emit = defineEmits<{
+  success: []
+  cancel: []
+}>()
 
 const isEditing = computed(() => !!props.listingToEdit)
 
@@ -105,17 +103,29 @@ const formData = ref<FormData>({
 })
 
 // Инициализация формы при редактировании
-onMounted(() => {
-  if (props.listingToEdit) {
-    formData.value = {
-      title: props.listingToEdit.title,
-      description: props.listingToEdit.description,
-      address: props.listingToEdit.address,
-      pricePerNight: props.listingToEdit.pricePerNight,
-      numberOfGuests: props.listingToEdit.numberOfGuests
+watch(
+  () => props.listingToEdit,
+  (listing) => {
+    if (listing) {
+      formData.value = {
+        title: listing.title,
+        description: listing.description,
+        address: listing.address,
+        pricePerNight: listing.pricePerNight,
+        numberOfGuests: listing.numberOfGuests
+      }
+    } else {
+      formData.value = {
+        title: '',
+        description: '',
+        address: '',
+        pricePerNight: 0,
+        numberOfGuests: 1
+      }
     }
-  }
-})
+  },
+  { immediate: true }
+)
 
 const checkDescriptionLength = () => {
   if (formData.value.description.length > 2000) {
@@ -187,6 +197,7 @@ const handleSubmit = async () => {
       }
     }
 
+    emit('success')
   } catch (err) {
     error.value = isEditing.value 
       ? 'Ошибка при обновлении объявления' 

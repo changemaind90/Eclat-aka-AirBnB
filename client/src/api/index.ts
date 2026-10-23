@@ -1,8 +1,12 @@
 import axios, { AxiosError } from 'axios'
+import type { ApiError } from '@/types'
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:3000/booking/api'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/booking/api',
-  timeout: 10000
+  baseURL: API_BASE_URL,
+  timeout: 10000,
 })
 
 function getToken(): string | null {
@@ -16,6 +20,11 @@ function clearToken() {
   sessionStorage.removeItem('token')
 }
 
+type ErrorBody = {
+  message?: string | string[]
+  errors?: Record<string, string[]>
+}
+
 api.interceptors.request.use((config) => {
   const token = getToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -24,20 +33,30 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<any>) => {
+  (error: AxiosError<ErrorBody>) => {
     const status = error.response?.status
-    if (status === 401) clearToken()
+    if (status === 401) {
+      clearToken()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth:unauthorized'))
+      }
+    }
 
+    const data = error.response?.data
     if (error.response) {
-      return Promise.reject({
-        message: (error.response.data as any)?.message || 'Ошибка сервера',
-        statusCode: status,
-        errors: (error.response.data as any)?.errors
-      })
+      const message = Array.isArray(data?.message)
+        ? data.message.join(', ')
+        : data?.message
+      const rejection: ApiError = {
+        message: message || 'Ошибка сервера',
+        statusCode: status ?? 500,
+        errors: data?.errors,
+      }
+      return Promise.reject(rejection)
     }
 
     return Promise.reject({ message: 'Нет соединения с сервером' })
-  }
+  },
 )
 
 export default api

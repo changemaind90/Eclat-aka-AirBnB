@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  ParseIntPipe,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -49,9 +50,14 @@ export class BookingController {
       listingId: 2,
     },
   })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @Post('/confirm/:id')
-  confirmBook(@Param('id') id: string) {
-    return this.bookingService.confirmBook(+id);
+  confirmBook(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.bookingService.confirmBook(id, req.user.id);
   }
 
   @ApiResponse({
@@ -65,9 +71,14 @@ export class BookingController {
       listingId: 2,
     },
   })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @Post('/cancel/:id')
-  cancelBook(@Param('id') id: string) {
-    return this.bookingService.cancelBook(+id);
+  cancelBook(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.bookingService.cancelBook(id, req.user.id);
   }
 
   @ApiResponse({
@@ -81,9 +92,14 @@ export class BookingController {
       listingId: 2,
     },
   })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @Post('/complete/:id')
-  completeBook(@Param('id') id: string) {
-    return this.bookingService.completeBook(+id);
+  completeBook(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.bookingService.completeBook(id, req.user.id);
   }
 
   @ApiResponse({

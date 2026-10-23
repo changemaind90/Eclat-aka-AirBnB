@@ -6,6 +6,8 @@ import {
   Patch,
   Param,
   Delete,
+  ParseIntPipe,
+  Query,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -19,6 +21,12 @@ import type { RequestWithUser } from 'src/common/request-with-user';
 @Controller('listings')
 export class ListingsController {
   constructor(private readonly listingsService: ListingsService) {}
+
+  private parsePagination(page?: string, limit?: string) {
+    const p = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const l = Math.min(100, Math.max(1, parseInt(limit ?? '20', 10) || 20));
+    return { skip: (p - 1) * l, take: l };
+  }
 
   @ApiBearerAuth()
   @ApiResponse({
@@ -66,8 +74,15 @@ export class ListingsController {
   })
   @UseGuards(AuthGuard('jwt'))
   @Get()
-  find(@Req() req: RequestWithUser) {
-    return this.listingsService.find(req.user.id);
+  find(
+    @Req() req: RequestWithUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.listingsService.find(
+      req.user.id,
+      this.parsePagination(page, limit),
+    );
   }
 
   @ApiResponse({
@@ -93,8 +108,8 @@ export class ListingsController {
     ],
   })
   @Get('all')
-  findAll() {
-    return this.listingsService.findAll();
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.listingsService.findAll(this.parsePagination(page, limit));
   }
 
   @ApiResponse({
@@ -109,8 +124,8 @@ export class ListingsController {
     },
   })
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.listingsService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.listingsService.findOne(id);
   }
 
   @ApiResponse({
@@ -124,9 +139,15 @@ export class ListingsController {
       ownerId: 7,
     },
   })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateListingDto: UpdateListingDto) {
-    return this.listingsService.update(+id, updateListingDto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateListingDto: UpdateListingDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.listingsService.update(id, updateListingDto, req.user.id);
   }
 
   @ApiResponse({
@@ -140,8 +161,10 @@ export class ListingsController {
       ownerId: 7,
     },
   })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.listingsService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithUser) {
+    return this.listingsService.remove(id, req.user.id);
   }
 }

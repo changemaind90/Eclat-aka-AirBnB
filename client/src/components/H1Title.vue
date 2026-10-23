@@ -33,14 +33,20 @@ import SearchFilters from './SearchFilters.vue'
 const videoSrc = '/videos/background.mp4'
 const videoRef = ref<HTMLVideoElement | null>(null)
 
+const emit = defineEmits<{
+  search: [filters: { query: string; type: string }]
+}>()
+
 onMounted(() => {
   if (videoRef.value) {
-    videoRef.value.play().catch(e => {
-      console.error('Video autoplay error:', e) })}})
+    videoRef.value.play().catch((e) => {
+      console.error('Video autoplay error:', e)
+    })
+  }
+})
 
 const handleSearch = (filters: { query: string; type: string }) => {
-  console.log('Search filters:', filters)
-  // Здесь можно обработать фильтры или передать их выше
+  emit('search', filters)
 }
 </script>
 
