@@ -4,11 +4,11 @@
     <div class="video-background">
       <video
         ref="videoRef"
-        :src="videoSrc"
         autoplay
         loop
         muted
         playsinline
+        preload="none"
       ></video>
     </div>
 
@@ -38,10 +38,23 @@ const emit = defineEmits<{
 }>()
 
 onMounted(() => {
-  if (videoRef.value) {
-    videoRef.value.play().catch((e) => {
-      console.error('Video autoplay error:', e)
-    })
+  const video = videoRef.value
+  if (!video) return
+
+  const prefersReducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  ).matches
+  if (prefersReducedMotion) return
+
+  const startPlayback = () => {
+    video.src = videoSrc
+    void video.play().catch(() => undefined)
+  }
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(startPlayback, { timeout: 2000 })
+  } else {
+    window.setTimeout(startPlayback, 200)
   }
 })
 
